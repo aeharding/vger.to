@@ -1,4 +1,4 @@
-import type { CommunityView } from "lemmy-js-client";
+import type { CommunityView } from "threadiverse";
 import styles from "./CommunityPreview.module.css";
 import InlineMarkdown from "~/helpers/InlineMarkdown";
 

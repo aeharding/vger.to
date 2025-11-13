@@ -1,4 +1,4 @@
-import type { CommentView } from "lemmy-js-client";
+import type { CommentView } from "threadiverse";
 import styles from "./CommentPreview.module.css";
 import InlineMarkdown from "~/helpers/InlineMarkdown";
 

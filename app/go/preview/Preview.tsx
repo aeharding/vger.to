@@ -1,4 +1,4 @@
-import type { ResolveObjectResponse } from "lemmy-js-client";
+import type { ResolveObjectResponse } from "threadiverse";
 import PostPreview from "./PostPreview";
 import styles from "./Preview.module.css";
 import CommunityPreview from "./CommunityPreview";
