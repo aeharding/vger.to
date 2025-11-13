@@ -6,10 +6,6 @@ import Actions from "~/go/Actions";
 import About from "~/go/About";
 
 export async function loader({ params, request }: Route.LoaderArgs) {
-  // Sanity check domain name
-  if (!params.instance || !params.instance.includes("."))
-    throw new Error("Invalid instance");
-
   return resolveObject(resolveQFromParams(params), request.signal);
 }
 
@@ -27,6 +23,10 @@ export default function Go({ loaderData, params }: Route.ComponentProps) {
 }
 
 function resolveInstanceUrlFromParams(params: Route.LoaderArgs["params"]) {
+  // Sanity check domain name
+  if (!params.instance || !params.instance.includes("."))
+    throw new Error("Invalid instance");
+
   return buildInstanceUrl(params.instance);
 }
 
