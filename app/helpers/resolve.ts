@@ -95,24 +95,6 @@ async function _resolveObjectUncached(
   url: string,
   signal?: AbortSignal
 ): Promise<ResolveObjectResponse> {
-  const instance = buildInstanceUrl(getHostname(url));
-
-  let client = new ThreadiverseClient(instance, {
-    fetchFunction: fetch,
-    headers: LEMMY_CLIENT_HEADERS,
-  });
-
-  try {
-    await client.getSoftware();
-  } catch (error) {
-    console.error(`${instance} is not a Threadiverse compatible instance`);
-
-    client = new ThreadiverseClient("lemmy.zip", {
-      fetchFunction: fetch,
-      headers: LEMMY_CLIENT_HEADERS,
-    });
-  }
-
   const canonicalUrl = getCanonicalUrl(url);
   const fedilink = await resolveFedilink(canonicalUrl, { signal });
 
@@ -120,7 +102,31 @@ async function _resolveObjectUncached(
     throw new Error("Could not find fedilink");
   }
 
-  return client.resolveObject(
+  try {
+    return await _resolveObjectUncachedWithInstance(
+      buildInstanceUrl(getHostname(url)),
+      fedilink,
+      signal
+    );
+  } catch (error) {
+    console.error(error);
+
+    return _resolveObjectUncachedWithInstance(
+      buildInstanceUrl("lemmy.zip"),
+      fedilink,
+      signal
+    );
+  }
+}
+
+async function _resolveObjectUncachedWithInstance(
+  instance: string,
+  fedilink: string,
+  signal?: AbortSignal
+): Promise<ResolveObjectResponse> {
+  return new ThreadiverseClient(instance, {
+    headers: LEMMY_CLIENT_HEADERS,
+  }).resolveObject(
     {
       q: fedilink,
     },

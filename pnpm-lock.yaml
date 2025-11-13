@@ -66,8 +66,8 @@ importers:
         specifier: ^11.0.0
         version: 11.0.0
       threadiverse:
-        specifier: ^0.7.3
-        version: 0.7.3
+        specifier: ^0.8.0
+        version: 0.8.0
       unified:
         specifier: ^11.0.5
         version: 11.0.5
@@ -1907,8 +1907,8 @@ packages:
     resolution: {integrity: sha512-g9ljZiwki/LfxmQADO3dEY1CbpmXT5Hm2fJ+QaGKwSXUylMybePR7/67YW7jOrrvjEgL1Fmz5kzyAjWVWLlucg==}
     engines: {node: '>=6'}
 
-  threadiverse@0.7.3:
-    resolution: {integrity: sha512-dvksZNjlRZRYPMg2PFXJO5p+XkzabVs0mV0mCdTWJfrL/4yJ4TvMZDqvGgJy+Mi40lIZaXrrBXI5skJgqHBmJg==}
+  threadiverse@0.8.0:
+    resolution: {integrity: sha512-pGEErMqQG2C381rZz9BWmpWTh6m2LCuMYvZ51mAOo8NmRtM47HZcbD0wqRZuve6ej7SnIRI72pXnOPgs+3Q4Mg==}
 
   tinyglobby@0.2.15:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
@@ -4194,7 +4194,7 @@ snapshots:
 
   tapable@2.3.0: {}
 
-  threadiverse@0.7.3:
+  threadiverse@0.8.0:
     dependencies:
       compare-versions: 6.1.1
       lemmy-js-client-v0: lemmy-js-client@0.20.0-alpha.18
