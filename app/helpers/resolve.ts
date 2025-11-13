@@ -120,9 +120,12 @@ async function _resolveObjectUncached(
     throw new Error("Could not find fedilink");
   }
 
-  return client.resolveObject({
-    q: fedilink,
-  });
+  return client.resolveObject(
+    {
+      q: fedilink,
+    },
+    { signal }
+  );
 }
 
 /**
