@@ -1,10 +1,12 @@
+import { USER_AGENT_HEADERS } from "~/helpers/headers";
+
 export default async function resolveFedilink(
   url: string,
   requestInit: Pick<RequestInit, "signal">
 ): Promise<string> {
   const response = await fetch(url, {
     ...requestInit,
-    headers: { Accept: "application/activity+json" },
+    headers: { ...USER_AGENT_HEADERS, Accept: "application/activity+json" },
   });
 
   const data = await response.json();
