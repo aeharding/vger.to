@@ -15,7 +15,6 @@
     "@react-router/node": "^7.5.3",
     "@react-router/serve": "^7.5.3",
     "isbot": "^5.1.27",
-    "lemmy-js-client": "^0.19.9",
     "mdast-util-gfm-autolink-literal-lemmy": "^3.0.1",
     "mdast-util-gfm-strikethrough": "^2.0.0",
     "mdast-util-gfm-table": "^2.0.0",
@@ -29,6 +28,7 @@
     "react-router": "^7.5.3",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
+    "threadiverse": "^0.7.3",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.0.0"
   },

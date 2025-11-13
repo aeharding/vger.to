@@ -1,19 +1,16 @@
 import { buildInstanceUrl, resolveObject } from "~/helpers/resolve";
 import type { Route } from "./+types/go";
 
-import { type ResolveObjectResponse } from "lemmy-js-client";
 import Preview from "~/go/preview/Preview";
 import Actions from "~/go/Actions";
 import About from "~/go/About";
-import { determineIsLemmyInstance } from "~/services/lemmy";
 
-export async function loader({ params }: Route.LoaderArgs) {
-  const isLemmyInstance = await determineIsLemmyInstance(params.instance);
+export async function loader({ params, request }: Route.LoaderArgs) {
+  // Sanity check domain name
+  if (!params.instance || !params.instance.includes("."))
+    throw new Error("Invalid instance");
 
-  return await resolveObject(
-    resolveQFromParams(params),
-    isLemmyInstance ? undefined : "lemmy.zip",
-  );
+  return resolveObject(resolveQFromParams(params), request.signal);
 }
 
 export default function Go({ loaderData, params }: Route.ComponentProps) {

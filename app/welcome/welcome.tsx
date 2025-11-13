@@ -2,7 +2,7 @@ import styles from "./welcome.module.css";
 
 export function Welcome() {
   return (
-    <div>
+    <div className={styles.container}>
       <p>
         Hi there! This site (vger.to) helps you share Lemmy posts and comments
         with Voyager users. If they have the app installed, shared links will

@@ -1,4 +1,4 @@
-import type { PersonView } from "lemmy-js-client";
+import type { PersonView } from "threadiverse";
 import styles from "./PersonPreview.module.css";
 import InlineMarkdown from "~/helpers/InlineMarkdown";
 

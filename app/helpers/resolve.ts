@@ -1,9 +1,6 @@
-import {
-  LemmyHttp,
-  type LemmyErrorType,
-  type ResolveObjectResponse,
-} from "lemmy-js-client";
+import { ThreadiverseClient, type ResolveObjectResponse } from "threadiverse";
 import TTLCache from "@isaacs/ttlcache";
+import resolveFedilink from "~/services/activitypub";
 
 // Cache for resolved objects with 15-minute TTL
 const resolveCache = new TTLCache<string, Promise<ResolveObjectResponse>>({
@@ -28,42 +25,16 @@ export const LEMMY_CLIENT_HEADERS = {
  */
 export const COMMENT_VIA_POST_PATH = /^\/post\/\d+\/(\d+)$/;
 
+export const PIEFED_COMMENT_PATH_AND_HASH =
+  /^\/post\/\d+\/[^#]+#comment_(\d+)$/;
+
 export const USER_PATH =
   /^\/u\/([a-zA-Z0-9._%+-]+(@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})?)\/?$/;
 export const COMMUNITY_PATH =
   /^\/c\/([a-zA-Z0-9._%+-]+(@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})?)\/?$/;
 
-const POTENTIAL_PATHS = [
-  POST_PATH,
-  COMMENT_PATH,
-  COMMENT_VIA_POST_PATH,
-  USER_PATH,
-  COMMUNITY_PATH,
-] as const;
-
-/*
- * This file is needed for a migration to lemmy v1
- *
- * After Voyager requires v1, this file can be removed
- */
-
-export function getApId(obj: { actor_id: string }): string;
-export function getApId(obj: { ap_id: string }): string;
-export function getApId(
-  obj: { actor_id: string } | undefined,
-): string | undefined;
-export function getApId(obj: { ap_id: string } | undefined): string | undefined;
-export function getApId(obj: undefined): undefined;
-export function getApId(
-  obj: { ap_id?: string } | { actor_id?: string } | undefined,
-): string | undefined {
-  if (!obj) return;
-  if ("ap_id" in obj) return obj.ap_id;
-  if ("actor_id" in obj) return obj.actor_id;
-}
-
-export function matchLemmyCommunity(
-  urlPathname: string,
+export function matchLemmyOrPiefedCommunity(
+  urlPathname: string
 ): [string, string] | [string] | null {
   const matches = urlPathname.match(COMMUNITY_PATH);
   if (matches && matches[1]) {
@@ -74,8 +45,8 @@ export function matchLemmyCommunity(
   return null;
 }
 
-export function matchLemmyUser(
-  urlPathname: string,
+export function matchLemmyOrPiefedUser(
+  urlPathname: string
 ): [string, string] | [string] | null {
   const matches = urlPathname.match(USER_PATH);
   if (matches && matches[1]) {
@@ -86,23 +57,35 @@ export function matchLemmyUser(
   return null;
 }
 
-function isPotentialObjectPath(urlPathname: string): boolean {
-  for (const regex of POTENTIAL_PATHS) {
-    if (regex.test(urlPathname)) return true;
+/**
+ * Converts a remote community/user URL to its canonical home instance URL.
+ * Only applies to Lemmy/PieFed instances (detected by URL pattern).
+ * For example: https://lemmy.zip/c/politics@lemmy.world -> https://lemmy.world/c/politics
+ */
+function getCanonicalUrl(url: string): string {
+  const urlObj = new URL(url);
+  const { pathname } = urlObj;
+
+  // Check for remote community (Lemmy/PieFed pattern: /c/name@domain)
+  // This pattern is specific to Lemmy/PieFed, so it's safe to transform
+  const communityMatch = matchLemmyOrPiefedCommunity(pathname);
+  if (communityMatch && communityMatch.length === 2) {
+    const [communityName, domain] = communityMatch;
+    return `https://${domain}/c/${communityName}`;
   }
 
-  return false;
-}
+  // Check for remote user (Lemmy/PieFed pattern: /u/name@domain)
+  // This pattern is specific to Lemmy/PieFed, so it's safe to transform
+  const userMatch = matchLemmyOrPiefedUser(pathname);
+  if (userMatch && userMatch.length === 2) {
+    const [userName, domain] = userMatch;
+    return `https://${domain}/u/${userName}`;
+  }
 
-function getObjectName(urlPathname: string): string | undefined {
-  if (POST_PATH.test(urlPathname)) return "post";
-  if (COMMENT_PATH.test(urlPathname)) return "comment";
-  if (COMMENT_VIA_POST_PATH.test(urlPathname)) return "comment";
-  if (USER_PATH.test(urlPathname)) return "user";
-  if (COMMUNITY_PATH.test(urlPathname)) return "community";
+  // Return original URL if not a Lemmy/PieFed remote community/user pattern
+  // This ensures we don't transform URLs from other Fediverse software
+  return url;
 }
-
-const FALLBACK_RESOLVE_INSTANCE = "lemmy.zip";
 
 /**
  * Internal implementation of resolveObject without caching.
@@ -110,45 +93,36 @@ const FALLBACK_RESOLVE_INSTANCE = "lemmy.zip";
  */
 async function _resolveObjectUncached(
   url: string,
-  resolveInstance?: string,
+  signal?: AbortSignal
 ): Promise<ResolveObjectResponse> {
-  let object;
+  const instance = buildInstanceUrl(getHostname(url));
 
-  const client = new LemmyHttp(
-    buildInstanceUrl(resolveInstance ?? getHostname(normalizeObjectUrl(url))),
-    { headers: LEMMY_CLIENT_HEADERS },
-  );
+  let client = new ThreadiverseClient(instance, {
+    fetchFunction: fetch,
+    headers: LEMMY_CLIENT_HEADERS,
+  });
 
   try {
-    object = await client.resolveObject({
-      q: url,
-    });
+    await client.getSoftware();
   } catch (error) {
-    if (
-      // TODO START lemmy 0.19 and less support
-      isLemmyError(error, "couldnt_find_object" as never) ||
-      isLemmyError(error, "couldnt_find_post" as never) ||
-      isLemmyError(error, "couldnt_find_comment" as never) ||
-      isLemmyError(error, "couldnt_find_person" as never) ||
-      isLemmyError(error, "couldnt_find_community" as never) ||
-      // TODO END
-      isLemmyError(error, "not_found" as never)
-    ) {
-      const fedilink = await findFedilink(url);
+    console.error(`${instance} is not a Threadiverse compatible instance`);
 
-      if (!fedilink) {
-        throw new Error("Could not find fedilink");
-      }
-
-      object = await client.resolveObject({
-        q: fedilink,
-      });
-    } else {
-      throw error;
-    }
+    client = new ThreadiverseClient("lemmy.zip", {
+      fetchFunction: fetch,
+      headers: LEMMY_CLIENT_HEADERS,
+    });
   }
 
-  return object;
+  const canonicalUrl = getCanonicalUrl(url);
+  const fedilink = await resolveFedilink(canonicalUrl, { signal });
+
+  if (!fedilink) {
+    throw new Error("Could not find fedilink");
+  }
+
+  return client.resolveObject({
+    q: fedilink,
+  });
 }
 
 /**
@@ -157,74 +131,96 @@ async function _resolveObjectUncached(
  */
 export const resolveObject = async (
   url: string,
-  resolveInstance?: string,
+  signal?: AbortSignal
 ): Promise<ResolveObjectResponse> => {
   const normalizedUrl = normalizeObjectUrl(url);
 
-  // Check cache first
-  const cached = resolveCache.get(normalizedUrl);
-  if (cached) return cached;
+  // Check cache first, or create new promise
+  let promise = resolveCache.get(normalizedUrl);
+  if (!promise) {
+    promise = _resolveObjectUncached(url, signal);
+    resolveCache.set(normalizedUrl, promise);
+  }
 
-  // Create new promise and cache it
-  const promise = _resolveObjectUncached(url, resolveInstance);
-  resolveCache.set(normalizedUrl, promise);
-  return promise;
+  try {
+    return await promise;
+  } catch (error) {
+    // Remove failed requests from cache so they can be retried
+    resolveCache.delete(normalizedUrl);
+    throw error;
+  }
 };
 
 /**
- * FINE. we'll do it the hard/insecure way and ask original instance >:(
- * the below code should not need to exist.
+ * Sometimes the URL isn't an actual fedilink URL. For example,
+ * https://piefed.social/post/123#comment_456. So try to extract the
+ * fedilink from the URL if possible.
  */
-async function findFedilink(url: string): Promise<string | undefined> {
-  const { hostname, pathname } = new URL(normalizeObjectUrl(url));
+function findFedilinkFromQuirkUrl(link: string): string {
+  const url = new URL(link);
+  const software = getDetermineSoftware(url);
 
-  const client = new LemmyHttp(buildInstanceUrl(hostname), {
-    headers: LEMMY_CLIENT_HEADERS,
-  });
+  switch (software) {
+    case "lemmy": {
+      const response = findLemmyFedilinkFromQuirkUrl(link);
+      if (response) return response;
+      break;
+    }
+    case "piefed": {
+      const response = findPiefedFedilinkFromQuirkUrl(link);
+      if (response) return response;
+      break;
+    }
+  }
 
-  const potentialCommentId = findCommentIdFromUrl(pathname);
+  return link;
+}
+
+function getDetermineSoftware(url: URL): "lemmy" | "piefed" | "unknown" {
+  // Simple heuristic: check if URL contains piefed patterns
+  if (url.pathname.includes("/post/") && url.hash.includes("#comment_")) {
+    return "piefed";
+  }
+  // Default to lemmy for most instances
+  return "lemmy";
+}
+
+function findPiefedFedilinkFromQuirkUrl(link: string): string | undefined {
+  const url = new URL(link);
+  const { hostname } = url;
+
+  const potentialCommentId = findPiefedCommentIdFromUrl(url);
 
   if (typeof potentialCommentId === "number") {
-    const response = await client.getComment({
-      id: potentialCommentId,
-    });
-
-    return response.comment_view.comment.ap_id;
-  } else if (POST_PATH.test(pathname)) {
-    const response = await client.getPost({
-      id: +pathname.match(POST_PATH)![1]!,
-    });
-
-    return response.post_view.post.ap_id;
-  } else if (matchLemmyUser(pathname)) {
-    const [username, userHostname] = matchLemmyUser(pathname)!;
-
-    const response = await new LemmyHttp(
-      buildInstanceUrl(userHostname ?? hostname),
-      { headers: LEMMY_CLIENT_HEADERS },
-    ).getPersonDetails({
-      username,
-    });
-
-    return getApId(response.person_view.person);
-  } else if (matchLemmyCommunity(pathname)) {
-    const [community, communityHostname] = matchLemmyCommunity(pathname)!;
-
-    const response = await new LemmyHttp(
-      buildInstanceUrl(communityHostname ?? hostname),
-      { headers: LEMMY_CLIENT_HEADERS },
-    ).getCommunity({
-      name: community,
-    });
-
-    return getApId(response.community_view.community);
+    return `https://${hostname}/comment/${potentialCommentId}`;
   }
 }
 
-function findCommentIdFromUrl(pathname: string): number | undefined {
-  if (COMMENT_PATH.test(pathname)) return +pathname.match(COMMENT_PATH)![1]!;
+function findLemmyFedilinkFromQuirkUrl(link: string): string | undefined {
+  const url = new URL(link);
+  const { hostname } = url;
+
+  const potentialCommentId = findLemmyCommentIdFromUrl(url);
+
+  if (typeof potentialCommentId === "number") {
+    return `https://${hostname}/comment/${potentialCommentId}`;
+  }
+}
+
+function findLemmyCommentIdFromUrl(url: URL): number | undefined {
+  const { pathname } = url;
+
   if (COMMENT_VIA_POST_PATH.test(pathname))
     return +pathname.match(COMMENT_VIA_POST_PATH)![1]!;
+}
+
+function findPiefedCommentIdFromUrl(url: URL): number | undefined {
+  const { pathname, hash } = url;
+
+  const slug = `${pathname}${hash}`;
+
+  if (PIEFED_COMMENT_PATH_AND_HASH.test(slug))
+    return +slug.match(PIEFED_COMMENT_PATH_AND_HASH)![1]!;
 }
 
 export function normalizeObjectUrl(objectUrl: string) {
@@ -233,7 +229,7 @@ export function normalizeObjectUrl(objectUrl: string) {
   // Replace app schema "vger" with "https"
   url = url.replace(/^vger:\/\//, "https://");
 
-  // Strip fragment
+  // Strip fragment (but only after quirk URL processing)
   url = url.split("#")[0]!;
 
   // Strip query parameters
@@ -244,14 +240,6 @@ export function normalizeObjectUrl(objectUrl: string) {
 
 export function buildInstanceUrl(instance: string) {
   return `https://${instance}`;
-}
-
-export function isLemmyError(
-  error: unknown,
-  lemmyErrorValue: LemmyErrorType["error"],
-) {
-  if (!(error instanceof Error)) return;
-  return error.message === lemmyErrorValue;
 }
 
 export function getHostname(url: string) {
