@@ -1,6 +1,7 @@
 import { ThreadiverseClient, type ResolveObjectResponse } from "threadiverse";
 import { TTLCache } from "@isaacs/ttlcache";
 import resolveFedilink from "~/services/activitypub";
+import { USER_AGENT_HEADERS } from "./headers";
 
 // Cache for resolved objects with 15-minute TTL
 const resolveCache = new TTLCache<string, Promise<ResolveObjectResponse>>({
@@ -10,10 +11,6 @@ const resolveCache = new TTLCache<string, Promise<ResolveObjectResponse>>({
 export const POST_PATH = /^\/post\/(\d+)$/;
 
 export const COMMENT_PATH = /^\/comment\/(\d+)$/;
-
-export const LEMMY_CLIENT_HEADERS = {
-  "User-Agent": "vger.to",
-} as const;
 
 /**
  * Lemmy 0.19.4 added a new url format to reference comments,
@@ -125,7 +122,7 @@ async function _resolveObjectUncachedWithInstance(
   signal?: AbortSignal
 ): Promise<ResolveObjectResponse> {
   return new ThreadiverseClient(instance, {
-    headers: LEMMY_CLIENT_HEADERS,
+    headers: USER_AGENT_HEADERS,
   }).resolveObject(
     {
       q: fedilink,
