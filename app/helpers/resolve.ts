@@ -1,5 +1,5 @@
 import { ThreadiverseClient, type ResolveObjectResponse } from "threadiverse";
-import TTLCache from "@isaacs/ttlcache";
+import { TTLCache } from "@isaacs/ttlcache";
 import resolveFedilink from "~/services/activitypub";
 
 // Cache for resolved objects with 15-minute TTL
